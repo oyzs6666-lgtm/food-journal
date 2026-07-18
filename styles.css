@@ -98,10 +98,12 @@ fieldset { margin: 0; padding: 0; border: 0; }
   .day-section { padding-top: 16px; padding-bottom: 18px; }
   .day-meta { gap: 10px; padding-bottom: 14px; }
   .meal-row { grid-template-columns: 32px minmax(0, 1fr); gap: 5px; }
-  .food-grid { grid-template-columns: repeat(auto-fill, 76px); gap: 12px 4px; }
-  .food-photo { width: 72px; height: 72px; }
   .entry-form { padding: 18px; min-width: 0; }
   input[type="datetime-local"] { font-size: .88rem; padding-left: 8px; padding-right: 8px; }
+}
+@media (max-width: 520px) {
+  .food-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 8px; }
+  .food-photo { width: 100%; height: auto; aspect-ratio: 1; }
 }
 @media (prefers-color-scheme: dark) {
   :root { --background: #202a31; --foreground: #e1e7eb; --card: #2b363e; --card-foreground: #e1e7eb; --muted: #37444d; --muted-foreground: #aab6bd; --border: #4a5861; --accent: #3c4c58; --accent-foreground: #d4e0e7; --primary: #9bb2c2; --primary-foreground: #1f2a31; --destructive: #d49a9a; }
