@@ -7,8 +7,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="食记">
-  <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="manifest.json?v=10">
+  <link rel="stylesheet" href="styles.css?v=10">
   <title>食记</title>
 </head>
 <body>
@@ -103,12 +103,12 @@
   <div id="toast" class="toast" role="status"></div>
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').then((registration) => {
+      navigator.serviceWorker.register('sw.js?v=10').then((registration) => {
         registration.waiting?.postMessage('SKIP_WAITING');
         registration.update();
       }).catch(() => {});
     }
   </script>
-  <script src="app.js"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>
