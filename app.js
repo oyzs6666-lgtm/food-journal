@@ -9,6 +9,7 @@ let calorieGoal = Number(localStorage.getItem(GOAL_KEY)) || 2000;
 let monthOffset = 0;
 let draftImage = '';
 let photoBusy = false;
+let editingId = null;
 
 const timeline = document.querySelector('#timeline');
 const entryDialog = document.querySelector('#entry-dialog');
@@ -130,7 +131,7 @@ function renderDay(day) {
 }
 
 function renderFood(entry) {
-  return `<div class="food-card"><button type="button" class="food-card-button" data-delete="${entry.id}" aria-label="删除${escapeHtml(entry.name)}"><span class="food-photo"><img src="${entry.image}" alt="${escapeHtml(entry.name)}"></span><span class="food-name">${escapeHtml(entry.name)}</span><span class="food-calories">${entry.calories} kcal</span></button></div>`;
+  return `<div class="food-card"><button type="button" class="food-card-button" data-edit="${entry.id}" aria-label="编辑${escapeHtml(entry.name)}"><span class="food-photo"><img src="${entry.image}" alt="${escapeHtml(entry.name)}"></span><span class="food-name">${escapeHtml(entry.name)}</span><span class="food-calories">${entry.calories} kcal</span></button></div>`;
 }
 
 function escapeHtml(value) {
@@ -141,6 +142,8 @@ function openEntry(date, meal = 'breakfast') {
   const draftDate = new Date(`${date}T${new Date().toTimeString().slice(0, 5)}`);
   draftImage = '';
   photoBusy = false;
+  editingId = null;
+  document.querySelector('#delete-entry').hidden = true;
   entryForm.reset();
   document.querySelector(`input[name="meal"][value="${meal}"]`).checked = true;
   document.querySelector('#entry-time').value = toInputDate(draftDate);
@@ -148,6 +151,26 @@ function openEntry(date, meal = 'breakfast') {
   photoPreview.removeAttribute('src');
   photoPlaceholder.hidden = false;
   formError.textContent = '';
+  entryDialog.showModal();
+  entryDialog.scrollTop = 0;
+}
+
+function openEdit(id) {
+  const entry = entries.find((item) => item.id === id);
+  if (!entry) return;
+  editingId = id;
+  draftImage = entry.image;
+  photoBusy = false;
+  entryForm.reset();
+  document.querySelector('#entry-name').value = entry.name;
+  document.querySelector('#entry-calories').value = entry.calories;
+  document.querySelector(`input[name="meal"][value="${entry.meal}"]`).checked = true;
+  document.querySelector('#entry-time').value = toInputDate(new Date(entry.date));
+  photoPreview.src = entry.image;
+  photoPreview.hidden = false;
+  photoPlaceholder.hidden = true;
+  formError.textContent = '';
+  document.querySelector('#delete-entry').hidden = false;
   entryDialog.showModal();
   entryDialog.scrollTop = 0;
 }
@@ -175,7 +198,8 @@ function addEntry(event) {
     formError.textContent = '请选择有效的餐次和时间';
     return;
   }
-  const nextEntries = [...entries, { id: makeId(), name, calories, meal, date: date.toISOString(), image: draftImage }];
+  const nextEntry = { id: editingId || makeId(), name, calories, meal, date: date.toISOString(), image: draftImage };
+  const nextEntries = editingId ? entries.map((entry) => entry.id === editingId ? nextEntry : entry) : [...entries, nextEntry];
   try {
     saveEntries(nextEntries);
     entries = nextEntries;
@@ -183,6 +207,7 @@ function addEntry(event) {
     formError.textContent = '保存失败：存储空间不足，请删除一些旧记录后重试';
     return;
   }
+  editingId = null;
   entryDialog.close();
   render();
   showToast('记录已保存');
@@ -255,10 +280,10 @@ async function readPhoto(input) {
 }
 
 timeline.addEventListener('click', (event) => {
-  const deleteButton = event.target.closest('[data-delete]');
-  if (deleteButton) {
+  const editButton = event.target.closest('[data-edit]');
+  if (editButton) {
     event.preventDefault();
-    deleteEntry(deleteButton.dataset.delete);
+    openEdit(editButton.dataset.edit);
   }
 });
 cameraInput.addEventListener('change', () => readPhoto(cameraInput));
@@ -267,6 +292,12 @@ document.querySelector('#take-photo').addEventListener('click', () => cameraInpu
 document.querySelector('#choose-photo').addEventListener('click', () => albumInput.click());
 entryForm.addEventListener('submit', addEntry);
 document.querySelector('#close-dialog').addEventListener('click', () => entryDialog.close());
+document.querySelector('#delete-entry').addEventListener('click', () => {
+  if (!editingId || !window.confirm('删除这条饮食记录？')) return;
+  deleteEntry(editingId);
+  editingId = null;
+  entryDialog.close();
+});
 document.querySelector('#floating-add').addEventListener('click', () => openEntry(dateKey(now), 'breakfast'));
 document.querySelector('#today-button').addEventListener('click', () => { monthOffset = 0; render(); });
 document.querySelector('#previous-month').addEventListener('click', () => { monthOffset -= 1; render(); });

@@ -7,8 +7,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="食记">
-  <link rel="manifest" href="manifest.json?v=10">
-  <link rel="stylesheet" href="styles.css?v=10">
+  <link rel="manifest" href="manifest.json?v=13">
+  <link rel="stylesheet" href="styles.css?v=13">
   <title>食记</title>
 </head>
 <body>
@@ -86,6 +86,7 @@
       <label class="field-label" for="entry-time">时间</label>
       <input class="field" id="entry-time" type="datetime-local" required>
       <button class="btn btn-primary btn-block" id="save-entry" type="submit">保存记录</button>
+      <button class="btn btn-ghost btn-block" id="delete-entry" type="button" hidden>删除记录</button>
       <p id="form-error" class="form-error" role="alert"></p>
     </form>
   </dialog>
@@ -103,12 +104,12 @@
   <div id="toast" class="toast" role="status"></div>
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js?v=10').then((registration) => {
+      navigator.serviceWorker.register('sw.js?v=13').then((registration) => {
         registration.waiting?.postMessage('SKIP_WAITING');
         registration.update();
       }).catch(() => {});
     }
   </script>
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=13"></script>
 </body>
 </html>
