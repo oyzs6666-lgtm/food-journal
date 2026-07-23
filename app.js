@@ -1,5 +1,6 @@
 const ENTRY_KEY = 'satiety-journal.entries.v1';
 const PROMPT_KEY = 'satiety-journal.prompts.v1';
+const UI_KEY = 'satiety-journal.ui.v1';
 
 if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 
@@ -23,10 +24,14 @@ const LEVEL_COLORS = [
 
 let entries = loadJson(ENTRY_KEY, []);
 let prompts = loadPrompts();
+let uiState = loadUiState();
 let selectedLevel = null;
-let statsDate = dateKey(new Date());
+let statsDate = /^\d{4}-\d{2}-\d{2}$/.test(uiState.statsDate || '') ? uiState.statsDate : dateKey(new Date());
+if (statsDate > dateKey(new Date())) statsDate = dateKey(new Date());
+let currentView = uiState.view === 'stats' ? 'stats' : 'record';
 let chartPoints = [];
 let toastTimer;
+let scrollSaveTimer;
 let editingId = null;
 let editingLevel = null;
 
@@ -72,6 +77,26 @@ function loadJson(key, fallback) {
   } catch {
     return fallback;
   }
+}
+
+function loadUiState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(UI_KEY));
+    return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistUiState() {
+  try { localStorage.setItem(UI_KEY, JSON.stringify(uiState)); } catch {}
+}
+
+function rememberUiState() {
+  if (currentView === 'record') uiState.recordScroll = Math.max(0, window.scrollY || 0);
+  uiState.view = currentView;
+  uiState.statsDate = statsDate;
+  persistUiState();
 }
 
 function loadPrompts() {
@@ -271,18 +296,26 @@ function saveEditedRecord(event) {
   showToast('记录已更新');
 }
 
-function resetRecordScroll() {
-  const reset = () => {
-    window.scrollTo(0, 0);
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
+function restoreRecordScroll() {
+  const target = Math.max(0, Number(uiState.recordScroll) || 0);
+  const restore = () => {
+    window.scrollTo(0, target);
+    document.documentElement.scrollTop = target;
+    document.body.scrollTop = target;
   };
-  reset();
-  requestAnimationFrame(() => requestAnimationFrame(reset));
-  setTimeout(reset, 120);
+  restore();
+  requestAnimationFrame(() => requestAnimationFrame(restore));
+  setTimeout(restore, 120);
 }
 
 function showView(name) {
+  if (currentView === 'record' && name !== 'record') {
+    uiState.recordScroll = Math.max(0, window.scrollY || 0);
+  }
+  currentView = name === 'stats' ? 'stats' : 'record';
+  uiState.view = currentView;
+  uiState.statsDate = statsDate;
+  persistUiState();
   const showStats = name === 'stats';
   document.documentElement.classList.toggle('stats-active', showStats);
   document.body.classList.toggle('stats-active', showStats);
@@ -294,7 +327,7 @@ function showView(name) {
     active ? button.setAttribute('aria-current', 'page') : button.removeAttribute('aria-current');
   });
   if (showStats) requestAnimationFrame(renderChart);
-  else resetRecordScroll();
+  else restoreRecordScroll();
 }
 
 function renderPromptEditor() {
@@ -325,6 +358,7 @@ function moveStatsDay(offset) {
   const next = dateKey(date);
   if (next > dateKey(new Date())) return;
   statsDate = next;
+  rememberUiState();
   renderChart();
 }
 
@@ -400,16 +434,21 @@ function renderChart() {
   if (!chartPoints.length) return;
 
   if (chartPoints.length > 1) {
-    const gradient = ctx.createLinearGradient(plot.left, 0, plot.right, 0);
-    gradient.addColorStop(0, '#3178bd');
-    gradient.addColorStop(1, '#e8584f');
-    ctx.strokeStyle = gradient;
     ctx.lineWidth = compact ? 2 : 2.5;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-    ctx.beginPath();
-    chartPoints.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y));
-    ctx.stroke();
+    for (let index = 1; index < chartPoints.length; index += 1) {
+      const previous = chartPoints[index - 1];
+      const current = chartPoints[index];
+      const segmentGradient = ctx.createLinearGradient(previous.x, previous.y, current.x, current.y);
+      segmentGradient.addColorStop(0, LEVEL_COLORS[previous.entry.level - 1]);
+      segmentGradient.addColorStop(1, LEVEL_COLORS[current.entry.level - 1]);
+      ctx.strokeStyle = segmentGradient;
+      ctx.beginPath();
+      ctx.moveTo(previous.x, previous.y);
+      ctx.lineTo(current.x, current.y);
+      ctx.stroke();
+    }
   }
 
   chartPoints.forEach((point, index) => {
@@ -517,6 +556,7 @@ elements.nextDay.addEventListener('click', () => moveStatsDay(1));
 elements.statsDateInput.addEventListener('change', () => {
   if (!elements.statsDateInput.value) return;
   statsDate = elements.statsDateInput.value;
+  rememberUiState();
   renderChart();
 });
 elements.chart.addEventListener('pointerdown', showChartPoint);
@@ -526,14 +566,24 @@ const resizeObserver = new ResizeObserver(() => {
 });
 resizeObserver.observe(elements.chartWrap);
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) {
+  if (document.hidden) {
+    rememberUiState();
+  } else {
     renderHome();
     if (statsDate > dateKey(new Date())) statsDate = dateKey(new Date());
-    showView('record');
+    if (currentView === 'stats') renderChart();
+    else restoreRecordScroll();
   }
 });
-window.addEventListener('pageshow', () => showView('record'));
+window.addEventListener('scroll', () => {
+  if (currentView !== 'record') return;
+  uiState.recordScroll = Math.max(0, window.scrollY || 0);
+  clearTimeout(scrollSaveTimer);
+  scrollSaveTimer = setTimeout(persistUiState, 180);
+}, { passive: true });
+window.addEventListener('pagehide', rememberUiState);
+window.addEventListener('pageshow', () => showView(currentView));
 
 renderLevelButtons();
 renderHome();
-showView('record');
+showView(currentView);
