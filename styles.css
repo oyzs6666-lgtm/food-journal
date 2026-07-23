@@ -12,7 +12,7 @@
 }
 
 * { box-sizing: border-box; }
-html { background: var(--paper); }
+html { background: var(--paper); touch-action: pan-x pan-y; }
 body { margin: 0; min-width: 320px; background: var(--paper); color: var(--ink); }
 button, input, textarea { font: inherit; }
 button { color: inherit; -webkit-tap-highlight-color: transparent; }
@@ -76,10 +76,12 @@ h2 { margin-bottom: 0; font-size: 1.08rem; font-weight: 720; }
 .stats-toolbar { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; gap: 10px; margin-bottom: 14px; }
 .date-button { width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); font-size: 1.6rem; cursor: pointer; }
 .date-button:disabled { opacity: .35; cursor: default; }
-.date-picker-button { border: 0; background: transparent; cursor: pointer; }
+.date-picker-control { position: relative; min-width: 0; text-align: center; cursor: pointer; }
+.date-picker-button { border: 0; background: transparent; pointer-events: none; }
 .date-picker-button strong, .date-picker-button span { display: block; }
 .date-picker-button strong { font-size: 1rem; }
 .date-picker-button span { margin-top: 2px; color: var(--muted); font-size: .68rem; }
+.date-picker-native { position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%; margin: 0; border: 0; opacity: .001; cursor: pointer; -webkit-appearance: none; appearance: none; }
 .chart-card { border: 1px solid var(--line); border-radius: 22px; background: var(--card); padding: 17px 12px 14px; box-shadow: 0 8px 30px rgba(67,57,37,.05); }
 .chart-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; padding: 0 6px 13px; }
 .chart-legend { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: .72rem; }
@@ -98,7 +100,7 @@ dialog form { max-height: min(88dvh, 820px); padding: 22px; overflow-y: auto; }
 .prompt-fields { display: grid; gap: 10px; }
 .prompt-field { display: grid; grid-template-columns: 36px 1fr; align-items: start; gap: 10px; }
 .prompt-field > span { display: grid; place-items: center; width: 36px; height: 36px; margin-top: 2px; border-radius: 11px; background: var(--level-color); color: white; font-size: .82rem; font-weight: 800; }
-.prompt-field textarea { width: 100%; min-height: 64px; resize: vertical; border: 1px solid var(--line); border-radius: 12px; background: white; padding: 10px 11px; color: var(--ink); font-size: .82rem; line-height: 1.45; }
+.prompt-field textarea { width: 100%; min-height: 64px; resize: vertical; border: 1px solid var(--line); border-radius: 12px; background: white; padding: 10px 11px; color: var(--ink); font-size: 16px; line-height: 1.45; }
 .edit-level-fieldset { padding: 0; margin: 0 0 18px; border: 0; }
 .edit-level-fieldset legend { margin-bottom: 9px; color: var(--muted); font-size: .78rem; }
 .edit-level-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; }
@@ -106,7 +108,7 @@ dialog form { max-height: min(88dvh, 820px); padding: 22px; overflow-y: auto; }
 .edit-level-button[aria-checked="true"] { border-color: white; box-shadow: 0 0 0 2px var(--level-color), 0 5px 14px color-mix(in srgb, var(--level-color), transparent 60%); transform: translateY(-1px); }
 .edit-fields { display: grid; grid-template-columns: 1.25fr .85fr .8fr; gap: 10px; }
 .edit-fields label { display: grid; gap: 7px; color: var(--muted); font-size: .78rem; }
-.edit-fields input { width: 100%; height: 48px; border: 1px solid var(--line); border-radius: 13px; background: white; padding: 0 12px; color: var(--ink); font-size: .92rem; }
+.edit-fields input { width: 100%; height: 48px; border: 1px solid var(--line); border-radius: 13px; background: white; padding: 0 12px; color: var(--ink); font-size: 16px; }
 .edit-fields .unit-input input { padding-right: 46px; }
 .edit-dialog-actions { grid-template-columns: .8fr 1.2fr; }
 .dialog-actions { position: sticky; bottom: -22px; display: grid; grid-template-columns: .8fr 1.2fr; gap: 10px; padding: 15px 0 22px; margin-top: 8px; background: linear-gradient(transparent, var(--card) 18%); }
@@ -133,7 +135,7 @@ dialog form { max-height: min(88dvh, 820px); padding: 22px; overflow-y: auto; }
   body.stats-active .app-header { display: none; }
   body.stats-active #stats-view { position: fixed; inset: 6px max(8px, env(safe-area-inset-right)) 6px max(112px, calc(env(safe-area-inset-left) + 106px)); display: block; width: auto; height: auto; min-height: 0; overflow: hidden; }
   .stats-toolbar { position: fixed; top: 6px; bottom: 96px; left: max(6px, env(safe-area-inset-left)); display: flex; width: 102px; min-height: 0; flex-direction: column; justify-content: center; margin: 0; }
-  .date-picker-button { order: -1; padding: 6px 0; }
+  .date-picker-control { order: -1; width: 100%; padding: 6px 0; }
   .date-button { width: 38px; height: 32px; }
   .chart-card { display: flex; flex-direction: column; width: 100%; min-width: 0; min-height: 0; height: 100%; max-height: 100%; padding: 7px 9px 4px; overflow: hidden; border-radius: 14px; }
   .chart-heading { padding-bottom: 4px; }

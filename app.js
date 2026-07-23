@@ -361,7 +361,7 @@ function renderChart() {
   elements.chartTooltip.hidden = true;
 
   const compact = bounds.height < 310;
-  const plot = { left: compact ? 39 : 46, right: bounds.width - 14, top: compact ? 16 : 27, bottom: bounds.height - (compact ? 25 : 34) };
+  const plot = { left: compact ? 28 : 32, right: bounds.width - 5, top: compact ? 16 : 27, bottom: bounds.height - (compact ? 25 : 34) };
   const xFor = (hour) => plot.left + ((hour - 7) / 17) * (plot.right - plot.left);
   const yFor = (level) => plot.bottom - ((level - 1) / 9) * (plot.bottom - plot.top);
 
@@ -383,8 +383,9 @@ function renderChart() {
     const x = xFor(hour);
     ctx.strokeStyle = hour % 2 === 1 ? '#f0ece5' : '#e4e0d8';
     ctx.beginPath(); ctx.moveTo(x, plot.top); ctx.lineTo(x, plot.bottom); ctx.stroke();
-    if (hour === 7 || hour === 24 || hour % 2 === 0) {
+    if (hour === 7 || hour === 24 || (hour >= 10 && hour % 2 === 0)) {
       ctx.fillStyle = '#88847c';
+      ctx.textAlign = hour === 7 ? 'left' : hour === 24 ? 'right' : 'center';
       ctx.fillText(`${hour}:00`, x, plot.bottom + 8);
     }
   }
@@ -513,10 +514,6 @@ document.querySelector('#reset-prompts').addEventListener('click', () => {
 });
 document.querySelector('#previous-day').addEventListener('click', () => moveStatsDay(-1));
 elements.nextDay.addEventListener('click', () => moveStatsDay(1));
-document.querySelector('#stats-date-button').addEventListener('click', () => {
-  if (typeof elements.statsDateInput.showPicker === 'function') elements.statsDateInput.showPicker();
-  else elements.statsDateInput.click();
-});
 elements.statsDateInput.addEventListener('change', () => {
   if (!elements.statsDateInput.value) return;
   statsDate = elements.statsDateInput.value;
