@@ -1,327 +1,433 @@
-const STORAGE_KEY = 'food-journal.entries.v1';
-const GOAL_KEY = 'food-journal.goal.v1';
-const mealNames = { breakfast: '早', lunch: '中', dinner: '晚' };
-const imagePaths = ['assets/demo-a.jpg', 'assets/demo-b.jpg', 'assets/demo-c.jpg', 'assets/demo-d.jpg', 'assets/demo-e.jpg'];
-const now = new Date();
+const ENTRY_KEY = 'satiety-journal.entries.v1';
+const PROMPT_KEY = 'satiety-journal.prompts.v1';
 
-let entries = loadEntries();
-let calorieGoal = Number(localStorage.getItem(GOAL_KEY)) || 2000;
-let monthOffset = 0;
-let draftImage = '';
-let photoBusy = false;
-let editingId = null;
+const DEFAULT_PROMPTS = [
+  '饿坏了，浑身无力、手抖、头晕',
+  '很饿，情绪和注意力明显受影响，但还没有手抖头晕',
+  '饥饿感明显，胃叫，但身体仍正常',
+  '有点饿，感觉胃空，暂时不吃也不难受',
+  '不饿不饱，感觉不到胃的存在',
+  '有点儿饱，把食物收走会难受烦躁',
+  '胃里有舒服的充实感，嘴馋但现在把食物收走不难受',
+  '明显饱，已经出现轻微顶胀，再吃主要是舍不得停',
+  '已经撑了，腹部发紧，继续吃会明显不舒服。',
+  '撑到极限，可能恶心、反流、胀痛或想吐。'
+];
 
-const timeline = document.querySelector('#timeline');
-const entryDialog = document.querySelector('#entry-dialog');
-const settingsDialog = document.querySelector('#settings-dialog');
-const entryForm = document.querySelector('#entry-form');
-const cameraInput = document.querySelector('#camera-input');
-const albumInput = document.querySelector('#album-input');
-const photoPreview = document.querySelector('#photo-preview');
-const photoPlaceholder = document.querySelector('#photo-placeholder');
-const formError = document.querySelector('#form-error');
-const toast = document.querySelector('#toast');
+const LEVEL_COLORS = [
+  '#2d70b7', '#347fc0', '#3e91bd', '#46a5ad', '#62b593',
+  '#9ebd62', '#d1b94e', '#e7a245', '#eb793f', '#e84f49'
+];
 
-function makeId() {
-  return globalThis.crypto?.randomUUID?.() || `entry-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
+let entries = loadJson(ENTRY_KEY, []);
+let prompts = loadPrompts();
+let selectedLevel = null;
+let statsDate = dateKey(new Date());
+let chartPoints = [];
+let toastTimer;
 
-function loadEntries() {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored) {
-    try {
-      const saved = JSON.parse(stored);
-      return saved.map((entry) => ({
-        ...entry,
-        image: entry.image?.replace('sample-1.jpg', 'demo-a.jpg').replace('sample-2.jpg', 'demo-b.jpg').replace('sample-3.jpg', 'demo-c.jpg').replace('sample-4.jpg', 'demo-d.jpg').replace('sample-5.jpg', 'demo-e.jpg')
-      }));
-    } catch {
-      localStorage.removeItem(STORAGE_KEY);
-    }
+const elements = {
+  todayLabel: document.querySelector('#today-label'),
+  todayCalories: document.querySelector('#today-calories'),
+  levelGrid: document.querySelector('#level-grid'),
+  selectionStatus: document.querySelector('#selection-status'),
+  promptCard: document.querySelector('#prompt-card'),
+  promptNumber: document.querySelector('#prompt-number'),
+  promptText: document.querySelector('#prompt-text'),
+  foodName: document.querySelector('#food-name'),
+  foodCalories: document.querySelector('#food-calories'),
+  saveButton: document.querySelector('#save-button'),
+  todayRecords: document.querySelector('#today-records'),
+  entryCount: document.querySelector('#entry-count'),
+  recordView: document.querySelector('#record-view'),
+  statsView: document.querySelector('#stats-view'),
+  navButtons: [...document.querySelectorAll('.nav-button')],
+  promptDialog: document.querySelector('#prompt-dialog'),
+  promptForm: document.querySelector('#prompt-form'),
+  promptFields: document.querySelector('#prompt-fields'),
+  statsDateLabel: document.querySelector('#stats-date-label'),
+  statsDateInput: document.querySelector('#stats-date-input'),
+  nextDay: document.querySelector('#next-day'),
+  chart: document.querySelector('#satiety-chart'),
+  chartWrap: document.querySelector('#chart-wrap'),
+  chartEmpty: document.querySelector('#chart-empty'),
+  chartTooltip: document.querySelector('#chart-tooltip'),
+  toast: document.querySelector('#toast')
+};
+
+function loadJson(key, fallback) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key));
+    return Array.isArray(value) ? value : fallback;
+  } catch {
+    return fallback;
   }
-  return seedEntries();
 }
 
-function seedEntries() {
-  const day = dateOnly(new Date());
-  const previous = new Date(day);
-  previous.setDate(previous.getDate() - 1);
-  const sample = (dateValue, meal, name, calories, time, image) => {
-    const date = new Date(dateValue);
-    date.setHours(time[0], time[1], 0, 0);
-    return { id: makeId(), date: date.toISOString(), meal, name, calories, image };
-  };
-  const seeded = [
-    sample(previous, 'breakfast', '拿铁咖啡', 120, [8, 26], imagePaths[0]),
-    sample(previous, 'breakfast', '鸡蛋吐司', 280, [10, 12], imagePaths[1]),
-    sample(previous, 'lunch', '午餐', 520, [12, 12], imagePaths[2]),
-    sample(previous, 'dinner', '汉堡', 640, [19, 51], imagePaths[4]),
-    sample(day, 'breakfast', '冰美式', 80, [8, 7], imagePaths[0]),
-    sample(day, 'breakfast', '牛奶', 160, [10, 18], imagePaths[1]),
-    sample(day, 'lunch', '蜂蜜面包', 260, [12, 1], imagePaths[3])
-  ];
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded)); } catch {}
-  return seeded;
+function loadPrompts() {
+  const saved = loadJson(PROMPT_KEY, DEFAULT_PROMPTS);
+  if (saved.length !== 10 || saved.some((item) => typeof item !== 'string')) return [...DEFAULT_PROMPTS];
+  return saved;
 }
 
-function dateOnly(value) {
-  const date = new Date(value);
-  date.setHours(0, 0, 0, 0);
-  return date;
+function persistEntries() {
+  localStorage.setItem(ENTRY_KEY, JSON.stringify(entries));
 }
 
 function dateKey(value) {
-  const date = dateOnly(value);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  const date = new Date(value);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-function formatMonth(date) {
-  return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long' }).format(date);
+function dateFromKey(key) {
+  const [year, month, day] = key.split('-').map(Number);
+  return new Date(year, month - 1, day);
 }
 
-function formatWeekday(date) {
-  return new Intl.DateTimeFormat('zh-CN', { weekday: 'short' }).format(date);
+function formatDate(key, includeYear = true) {
+  return new Intl.DateTimeFormat('zh-CN', {
+    ...(includeYear ? { year: 'numeric' } : {}), month: 'long', day: 'numeric', weekday: 'long'
+  }).format(dateFromKey(key));
 }
 
-function saveEntries(nextEntries = entries) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(nextEntries));
-}
-
-function daysForView() {
-  const anchor = new Date(now.getFullYear(), now.getMonth() + monthOffset + 1, 0);
-  if (monthOffset === 0) anchor.setTime(dateOnly(now).getTime());
-  return Array.from({ length: 7 }, (_, index) => {
-    const day = new Date(anchor);
-    day.setDate(anchor.getDate() - index);
-    return day;
-  });
-}
-
-function entriesFor(day, meal) {
-  return entries
-    .filter((entry) => dateKey(entry.date) === dateKey(day) && entry.meal === meal)
-    .sort((a, b) => new Date(a.date) - new Date(b.date));
-}
-
-function totalFor(day) {
-  return entries.filter((entry) => dateKey(entry.date) === dateKey(day)).reduce((sum, entry) => sum + Number(entry.calories || 0), 0);
-}
-
-function mealTotal(day, meal) {
-  return entriesFor(day, meal).reduce((sum, entry) => sum + Number(entry.calories || 0), 0);
-}
-
-function render() {
-  const days = daysForView();
-  document.querySelector('#month-title').textContent = formatMonth(days[0]);
-  document.querySelector('#next-month').disabled = monthOffset >= 0;
-  timeline.innerHTML = days.map(renderDay).join('');
-  requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
-}
-
-function renderDay(day) {
-  const mealRows = ['breakfast', 'lunch', 'dinner'].map((meal) => {
-    const cards = entriesFor(day, meal).map(renderFood).join('');
-    return `<div class="meal-row"><div class="meal-label"><strong>${mealNames[meal]}</strong><span>${mealTotal(day, meal)} kcal</span></div><div class="food-grid">${cards}</div></div>`;
-  }).join('');
-  return `<article class="day-section"><div class="day-meta"><span class="weekday">${formatWeekday(day)}</span><span class="day-number">${day.getDate()}</span><span class="day-total">${totalFor(day)} kcal</span></div><div class="meal-stack">${mealRows}</div></article>`;
-}
-
-function renderFood(entry) {
-  return `<div class="food-card"><button type="button" class="food-card-button" data-edit="${entry.id}" aria-label="编辑${escapeHtml(entry.name)}"><span class="food-photo"><img src="${entry.image}" alt="${escapeHtml(entry.name)}"></span><span class="food-name">${escapeHtml(entry.name)}</span><span class="food-calories">${entry.calories} kcal</span></button></div>`;
+function formatTime(value) {
+  return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value));
 }
 
 function escapeHtml(value) {
-  return String(value).replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
+  return String(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
 }
 
-function openEntry(date, meal = 'breakfast') {
-  const draftDate = new Date(`${date}T${new Date().toTimeString().slice(0, 5)}`);
-  draftImage = '';
-  photoBusy = false;
-  editingId = null;
-  document.querySelector('#delete-entry').hidden = true;
-  entryForm.reset();
-  document.querySelector(`input[name="meal"][value="${meal}"]`).checked = true;
-  document.querySelector('#entry-time').value = toInputDate(draftDate);
-  photoPreview.hidden = true;
-  photoPreview.removeAttribute('src');
-  photoPlaceholder.hidden = false;
-  formError.textContent = '';
-  entryDialog.showModal();
-  entryDialog.scrollTop = 0;
+function makeId() {
+  return crypto.randomUUID?.() || `record-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function openEdit(id) {
-  const entry = entries.find((item) => item.id === id);
-  if (!entry) return;
-  editingId = id;
-  draftImage = entry.image;
-  photoBusy = false;
-  entryForm.reset();
-  document.querySelector('#entry-name').value = entry.name;
-  document.querySelector('#entry-calories').value = entry.calories;
-  document.querySelector(`input[name="meal"][value="${entry.meal}"]`).checked = true;
-  document.querySelector('#entry-time').value = toInputDate(new Date(entry.date));
-  photoPreview.src = entry.image;
-  photoPreview.hidden = false;
-  photoPlaceholder.hidden = true;
-  formError.textContent = '';
-  document.querySelector('#delete-entry').hidden = false;
-  entryDialog.showModal();
-  entryDialog.scrollTop = 0;
+function renderLevelButtons() {
+  elements.levelGrid.innerHTML = LEVEL_COLORS.map((color, index) => {
+    const level = index + 1;
+    return `<button class="level-button" type="button" role="radio" aria-checked="${selectedLevel === level}" aria-label="${level}分饱：${escapeHtml(prompts[index])}" data-level="${level}" style="--level-color:${color}">${level}</button>`;
+  }).join('');
 }
 
-function toInputDate(date) {
-  const offset = date.getTimezoneOffset();
-  return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 16);
+function selectLevel(level) {
+  selectedLevel = level;
+  renderLevelButtons();
+  const color = LEVEL_COLORS[level - 1];
+  elements.selectionStatus.textContent = `${level} 分饱`;
+  elements.promptNumber.textContent = level;
+  elements.promptText.textContent = prompts[level - 1];
+  elements.promptCard.style.setProperty('--selected-color', color);
+  elements.promptCard.classList.add('is-selected');
+  elements.saveButton.disabled = false;
+  elements.saveButton.textContent = `记录 ${level} 分饱`;
 }
 
-function addEntry(event) {
-  event.preventDefault();
-  if (photoBusy) {
-    formError.textContent = '图片正在处理中，请稍候';
+function todayEntries() {
+  const today = dateKey(new Date());
+  return entries.filter((entry) => dateKey(entry.timestamp) === today).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+}
+
+function renderHome() {
+  const today = dateKey(new Date());
+  const records = todayEntries();
+  elements.todayLabel.textContent = formatDate(today);
+  elements.todayCalories.textContent = records.reduce((sum, entry) => sum + (Number(entry.calories) || 0), 0).toLocaleString('zh-CN');
+  elements.entryCount.textContent = `${records.length} 条`;
+  elements.todayRecords.innerHTML = records.length ? records.map((entry) => {
+    const details = [entry.food, entry.calories !== null && entry.calories !== '' ? `${entry.calories} kcal` : ''].filter(Boolean).join(' · ') || '未填写食物和热量';
+    return `<article class="record-row">
+      <span class="record-level" style="--level-color:${LEVEL_COLORS[entry.level - 1]}">${entry.level}</span>
+      <span class="record-main"><strong>${entry.level} 分饱</strong><span>${escapeHtml(details)}</span></span>
+      <time class="record-time" datetime="${entry.timestamp}">${formatTime(entry.timestamp)}</time>
+      <button class="delete-record" type="button" data-delete="${entry.id}" aria-label="删除${formatTime(entry.timestamp)}的记录">×</button>
+    </article>`;
+  }).join('') : '<p class="empty-records">今天还没有记录，先留意一下此刻身体的感觉吧。</p>';
+}
+
+function saveRecord() {
+  if (!selectedLevel) return;
+  const rawCalories = elements.foodCalories.value.trim();
+  const calories = rawCalories === '' ? null : Math.max(0, Math.min(9999, Number(rawCalories)));
+  if (rawCalories !== '' && !Number.isFinite(calories)) {
+    showToast('请填写有效的热量数字');
     return;
   }
-  const name = document.querySelector('#entry-name').value.trim();
-  const calories = Number(document.querySelector('#entry-calories').value);
-  const meal = document.querySelector('input[name="meal"]:checked')?.value;
-  const date = new Date(document.querySelector('#entry-time').value);
-  if (!name || !calories || !draftImage) {
-    formError.textContent = '请添加照片、描述和热量';
-    return;
-  }
-  if (!meal || Number.isNaN(date.getTime())) {
-    formError.textContent = '请选择有效的餐次和时间';
-    return;
-  }
-  const nextEntry = { id: editingId || makeId(), name, calories, meal, date: date.toISOString(), image: draftImage };
-  const nextEntries = editingId ? entries.map((entry) => entry.id === editingId ? nextEntry : entry) : [...entries, nextEntry];
+  const timestamp = new Date();
+  entries.push({
+    id: makeId(),
+    timestamp: timestamp.toISOString(),
+    level: selectedLevel,
+    food: elements.foodName.value.trim(),
+    calories
+  });
   try {
-    saveEntries(nextEntries);
-    entries = nextEntries;
+    persistEntries();
   } catch {
-    formError.textContent = '保存失败：存储空间不足，请删除一些旧记录后重试';
+    entries.pop();
+    showToast('保存失败，浏览器存储空间可能已满');
     return;
   }
-  editingId = null;
-  entryDialog.close();
-  render();
-  showToast('记录已保存');
+  elements.foodName.value = '';
+  elements.foodCalories.value = '';
+  selectedLevel = null;
+  renderLevelButtons();
+  elements.selectionStatus.textContent = '尚未选择';
+  elements.promptNumber.textContent = '—';
+  elements.promptText.textContent = '点击上方数字，查看对应的身体感受提示。';
+  elements.promptCard.classList.remove('is-selected');
+  elements.promptCard.style.removeProperty('--selected-color');
+  elements.saveButton.disabled = true;
+  elements.saveButton.textContent = '选择饱腹度后记录';
+  renderHome();
+  if (dateKey(timestamp) === statsDate) renderChart();
+  const hour = timestamp.getHours() + timestamp.getMinutes() / 60;
+  showToast(hour >= 7 ? '已记录此刻的饱腹感' : '记录已保存；夜间数据不进入折线图');
 }
 
-function deleteEntry(id) {
-  if (!entries.some((entry) => entry.id === id)) return;
-  const previousEntries = entries;
-  const nextEntries = entries.filter((entry) => entry.id !== id);
-  try {
-    saveEntries(nextEntries);
-    entries = nextEntries;
-  } catch {
-    entries = previousEntries;
-    showToast('删除失败，请稍后重试');
-    return;
-  }
-  render();
+function deleteRecord(id) {
+  const record = entries.find((entry) => entry.id === id);
+  if (!record || !confirm(`删除 ${formatTime(record.timestamp)} 的 ${record.level} 分饱记录？`)) return;
+  entries = entries.filter((entry) => entry.id !== id);
+  persistEntries();
+  renderHome();
+  renderChart();
   showToast('记录已删除');
 }
 
-function showToast(message) {
-  toast.textContent = message;
-  toast.classList.add('is-visible');
-  setTimeout(() => toast.classList.remove('is-visible'), 1800);
+function showView(name) {
+  const showStats = name === 'stats';
+  elements.recordView.hidden = showStats;
+  elements.statsView.hidden = !showStats;
+  elements.navButtons.forEach((button) => {
+    const active = button.dataset.view === name;
+    button.classList.toggle('is-active', active);
+    active ? button.setAttribute('aria-current', 'page') : button.removeAttribute('aria-current');
+  });
+  if (showStats) requestAnimationFrame(renderChart);
+  window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
-function compressPhoto(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = reject;
-    reader.onload = () => {
-      const image = new Image();
-      image.onerror = reject;
-      image.onload = () => {
-        const maxSide = 900;
-        const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-        const context = canvas.getContext('2d');
-        if (!context) { reject(new Error('canvas')); return; }
-        context.drawImage(image, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.78));
-      };
-      image.src = String(reader.result);
-    };
-    reader.readAsDataURL(file);
+function renderPromptEditor() {
+  elements.promptFields.innerHTML = prompts.map((prompt, index) => `<label class="prompt-field">
+    <span style="--level-color:${LEVEL_COLORS[index]}">${index + 1}</span>
+    <textarea maxlength="120" required aria-label="${index + 1}分饱提示词">${escapeHtml(prompt)}</textarea>
+  </label>`).join('');
+}
+
+function savePrompts(event) {
+  event.preventDefault();
+  const values = [...elements.promptFields.querySelectorAll('textarea')].map((field) => field.value.trim());
+  if (values.some((value) => !value)) {
+    showToast('每个等级都需要保留一条提示词');
+    return;
+  }
+  prompts = values;
+  localStorage.setItem(PROMPT_KEY, JSON.stringify(prompts));
+  renderLevelButtons();
+  if (selectedLevel) selectLevel(selectedLevel);
+  elements.promptDialog.close();
+  showToast('提示词已更新');
+}
+
+function moveStatsDay(offset) {
+  const date = dateFromKey(statsDate);
+  date.setDate(date.getDate() + offset);
+  const next = dateKey(date);
+  if (next > dateKey(new Date())) return;
+  statsDate = next;
+  renderChart();
+}
+
+function getChartEntries() {
+  return entries.filter((entry) => {
+    if (dateKey(entry.timestamp) !== statsDate) return false;
+    const time = new Date(entry.timestamp);
+    const hour = time.getHours() + time.getMinutes() / 60 + time.getSeconds() / 3600;
+    return hour >= 7 && hour < 24;
+  }).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+}
+
+function roundRect(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.roundRect(x, y, width, height, r);
+}
+
+function renderChart() {
+  const canvas = elements.chart;
+  const bounds = elements.chartWrap.getBoundingClientRect();
+  if (!bounds.width || !bounds.height) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.round(bounds.width * dpr);
+  canvas.height = Math.round(bounds.height * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, bounds.width, bounds.height);
+
+  elements.statsDateLabel.textContent = statsDate === dateKey(new Date()) ? '今天' : formatDate(statsDate, false);
+  elements.statsDateInput.value = statsDate;
+  elements.statsDateInput.max = dateKey(new Date());
+  elements.nextDay.disabled = statsDate >= dateKey(new Date());
+  elements.chartTooltip.hidden = true;
+
+  const compact = bounds.height < 310;
+  const plot = { left: compact ? 39 : 46, right: bounds.width - 14, top: compact ? 16 : 27, bottom: bounds.height - (compact ? 25 : 34) };
+  const xFor = (hour) => plot.left + ((hour - 7) / 17) * (plot.right - plot.left);
+  const yFor = (level) => plot.bottom - ((level - 1) / 9) * (plot.bottom - plot.top);
+
+  ctx.font = `${compact ? 9 : 10}px system-ui, sans-serif`;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  for (let level = 1; level <= 10; level += 1) {
+    const y = yFor(level);
+    ctx.strokeStyle = level === 1 || level === 10 ? '#d3cec5' : '#e9e5de';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(plot.left, y); ctx.lineTo(plot.right, y); ctx.stroke();
+    ctx.fillStyle = '#88847c';
+    ctx.fillText(String(level), plot.left - 9, y);
+  }
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  for (let hour = 7; hour <= 24; hour += 1) {
+    const x = xFor(hour);
+    ctx.strokeStyle = hour % 2 === 1 ? '#f0ece5' : '#e4e0d8';
+    ctx.beginPath(); ctx.moveTo(x, plot.top); ctx.lineTo(x, plot.bottom); ctx.stroke();
+    if (hour === 7 || hour === 24 || hour % 2 === 0) {
+      ctx.fillStyle = '#88847c';
+      ctx.fillText(`${hour}:00`, x, plot.bottom + 8);
+    }
+  }
+
+  const records = getChartEntries();
+  elements.chartEmpty.hidden = records.length > 0;
+  chartPoints = records.map((entry) => {
+    const time = new Date(entry.timestamp);
+    const hour = time.getHours() + time.getMinutes() / 60 + time.getSeconds() / 3600;
+    return { x: xFor(hour), y: yFor(entry.level), entry };
+  });
+  if (!chartPoints.length) return;
+
+  if (chartPoints.length > 1) {
+    const gradient = ctx.createLinearGradient(plot.left, 0, plot.right, 0);
+    gradient.addColorStop(0, '#3178bd');
+    gradient.addColorStop(1, '#e8584f');
+    ctx.strokeStyle = gradient;
+    ctx.lineWidth = compact ? 2 : 2.5;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    chartPoints.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y));
+    ctx.stroke();
+  }
+
+  chartPoints.forEach((point, index) => {
+    const { entry } = point;
+    ctx.fillStyle = LEVEL_COLORS[entry.level - 1];
+    ctx.strokeStyle = '#fffdf9';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(point.x, point.y, compact ? 4.5 : 5.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+    const label = [entry.food, entry.calories !== null && entry.calories !== '' ? `${entry.calories} kcal` : ''].filter(Boolean).join('，');
+    if (!label) return;
+    const shortLabel = label.length > 18 ? `${label.slice(0, 17)}…` : label;
+    ctx.font = `${compact ? 9 : 10}px system-ui, sans-serif`;
+    const labelWidth = Math.min(ctx.measureText(shortLabel).width + 12, 160);
+    const labelHeight = compact ? 18 : 20;
+    let labelX = point.x - labelWidth / 2;
+    labelX = Math.max(plot.left, Math.min(plot.right - labelWidth, labelX));
+    let labelY = point.y - labelHeight - 9;
+    if (labelY < plot.top) labelY = point.y + 9;
+    if (index > 0 && Math.abs(point.x - chartPoints[index - 1].x) < labelWidth * .55) {
+      labelY = point.y + 9;
+    }
+    ctx.fillStyle = 'rgba(255,253,249,.94)';
+    ctx.strokeStyle = '#d8d3ca';
+    ctx.lineWidth = 1;
+    roundRect(ctx, labelX, labelY, labelWidth, labelHeight, 6); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#4f4c46';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(shortLabel, labelX + labelWidth / 2, labelY + labelHeight / 2 + .5, labelWidth - 8);
   });
 }
 
-async function readPhoto(input) {
-  const file = input.files?.[0];
-  if (!file) return;
-  photoBusy = true;
-  formError.textContent = '图片处理中...';
-  try {
-    draftImage = await compressPhoto(file);
-    photoPreview.src = draftImage;
-    photoPreview.hidden = false;
-    photoPlaceholder.hidden = true;
-    formError.textContent = '';
-  } catch {
-    draftImage = '';
-    formError.textContent = '照片读取失败，请重新选择';
-  } finally {
-    photoBusy = false;
-    input.value = '';
+function showChartPoint(event) {
+  if (!chartPoints.length) return;
+  const rect = elements.chart.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+  let closest = null;
+  let distance = Infinity;
+  chartPoints.forEach((point) => {
+    const nextDistance = Math.hypot(point.x - x, point.y - y);
+    if (nextDistance < distance) { closest = point; distance = nextDistance; }
+  });
+  if (!closest || distance > 28) {
+    elements.chartTooltip.hidden = true;
+    return;
   }
+  const entry = closest.entry;
+  const details = [entry.food, entry.calories !== null && entry.calories !== '' ? `${entry.calories} kcal` : ''].filter(Boolean).join('，');
+  elements.chartTooltip.textContent = `${formatTime(entry.timestamp)} · ${entry.level}分饱${details ? ` · ${details}` : ''}`;
+  elements.chartTooltip.style.left = `${Math.max(80, Math.min(rect.width - 80, closest.x))}px`;
+  elements.chartTooltip.style.top = `${Math.max(48, closest.y)}px`;
+  elements.chartTooltip.hidden = false;
 }
 
-timeline.addEventListener('click', (event) => {
-  const editButton = event.target.closest('[data-edit]');
-  if (editButton) {
-    event.preventDefault();
-    openEdit(editButton.dataset.edit);
+function showToast(message) {
+  clearTimeout(toastTimer);
+  elements.toast.textContent = message;
+  elements.toast.classList.add('is-visible');
+  toastTimer = setTimeout(() => elements.toast.classList.remove('is-visible'), 1900);
+}
+
+elements.levelGrid.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-level]');
+  if (button) selectLevel(Number(button.dataset.level));
+});
+elements.saveButton.addEventListener('click', saveRecord);
+elements.todayRecords.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-delete]');
+  if (button) deleteRecord(button.dataset.delete);
+});
+elements.navButtons.forEach((button) => button.addEventListener('click', () => showView(button.dataset.view)));
+document.querySelector('#edit-prompts-button').addEventListener('click', () => {
+  renderPromptEditor();
+  elements.promptDialog.showModal();
+});
+document.querySelector('[data-close-dialog]').addEventListener('click', () => elements.promptDialog.close());
+elements.promptForm.addEventListener('submit', savePrompts);
+document.querySelector('#reset-prompts').addEventListener('click', () => {
+  if (!confirm('把十条提示词全部恢复为默认内容？')) return;
+  prompts = [...DEFAULT_PROMPTS];
+  renderPromptEditor();
+  showToast('已恢复默认内容，点击保存即可生效');
+});
+document.querySelector('#previous-day').addEventListener('click', () => moveStatsDay(-1));
+elements.nextDay.addEventListener('click', () => moveStatsDay(1));
+document.querySelector('#stats-date-button').addEventListener('click', () => {
+  if (typeof elements.statsDateInput.showPicker === 'function') elements.statsDateInput.showPicker();
+  else elements.statsDateInput.click();
+});
+elements.statsDateInput.addEventListener('change', () => {
+  if (!elements.statsDateInput.value) return;
+  statsDate = elements.statsDateInput.value;
+  renderChart();
+});
+elements.chart.addEventListener('pointerdown', showChartPoint);
+
+const resizeObserver = new ResizeObserver(() => {
+  if (!elements.statsView.hidden) renderChart();
+});
+resizeObserver.observe(elements.chartWrap);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    renderHome();
+    if (statsDate > dateKey(new Date())) statsDate = dateKey(new Date());
+    if (!elements.statsView.hidden) renderChart();
   }
 });
-cameraInput.addEventListener('change', () => readPhoto(cameraInput));
-albumInput.addEventListener('change', () => readPhoto(albumInput));
-document.querySelector('#take-photo').addEventListener('click', () => cameraInput.click());
-document.querySelector('#choose-photo').addEventListener('click', () => albumInput.click());
-entryForm.addEventListener('submit', addEntry);
-document.querySelector('#close-dialog').addEventListener('click', () => entryDialog.close());
-document.querySelector('#delete-entry').addEventListener('click', () => {
-  if (!editingId || !window.confirm('删除这条饮食记录？')) return;
-  deleteEntry(editingId);
-  editingId = null;
-  entryDialog.close();
-});
-document.querySelector('#floating-add').addEventListener('click', () => openEntry(dateKey(now), 'breakfast'));
-document.querySelector('#today-button').addEventListener('click', () => { monthOffset = 0; render(); });
-document.querySelector('#previous-month').addEventListener('click', () => { monthOffset -= 1; render(); });
-document.querySelector('#next-month').addEventListener('click', () => { if (monthOffset < 0) { monthOffset += 1; render(); } });
-document.querySelector('#settings-button').addEventListener('click', () => {
-  document.querySelector('#goal-input').value = calorieGoal;
-  settingsDialog.showModal();
-  settingsDialog.scrollTop = 0;
-});
-document.querySelector('[data-close-settings]').addEventListener('click', () => settingsDialog.close());
-document.querySelector('#settings-form').addEventListener('submit', (event) => {
-  event.preventDefault();
-  calorieGoal = Number(document.querySelector('#goal-input').value) || 2000;
-  try { localStorage.setItem(GOAL_KEY, calorieGoal); } catch {}
-  settingsDialog.close();
-  showToast('目标已更新');
-});
-document.querySelector('#clear-data').addEventListener('click', () => {
-  if (!window.confirm('清空所有饮食记录？')) return;
-  entries = [];
-  try { saveEntries(); } catch {}
-  settingsDialog.close();
-  render();
-  showToast('记录已清空');
-});
 
-render();
+renderLevelButtons();
+renderHome();

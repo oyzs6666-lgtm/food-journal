@@ -1,10 +1,12 @@
 {
-  "name": "食记",
-  "short_name": "食记",
+  "name": "几分饱 · 饱腹感记录",
+  "short_name": "几分饱",
+  "description": "记录每天的饱腹度、食物和热量，查看当日饱腹感曲线。",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#eef1f4",
-  "theme_color": "#66839a",
+  "background_color": "#f7f4ee",
+  "theme_color": "#f7f4ee",
   "lang": "zh-CN",
   "icons": []
 }
