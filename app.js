@@ -361,14 +361,13 @@ function renderChart() {
   elements.chartTooltip.hidden = true;
 
   const compact = bounds.height < 310;
-  const denseXAxis = bounds.width < 520;
-  const bottomInset = denseXAxis ? 47 : compact ? 25 : 34;
-  const plot = { left: 5, right: bounds.width - 4, top: compact ? 16 : 27, bottom: bounds.height - bottomInset };
+  const bottomInset = compact ? 25 : 32;
+  const plot = { left: 22, right: bounds.width - 4, top: compact ? 16 : 27, bottom: bounds.height - bottomInset };
   const xFor = (hour) => plot.left + ((hour - 7) / 17) * (plot.right - plot.left);
   const yFor = (level) => plot.bottom - ((level - 1) / 9) * (plot.bottom - plot.top);
 
   ctx.font = `${compact ? 9 : 10}px system-ui, sans-serif`;
-  ctx.textAlign = 'left';
+  ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
   for (let level = 1; level <= 10; level += 1) {
     const y = yFor(level);
@@ -376,10 +375,10 @@ function renderChart() {
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(plot.left, y); ctx.lineTo(plot.right, y); ctx.stroke();
     ctx.fillStyle = '#88847c';
-    ctx.fillText(String(level), plot.left + 4, y);
+    ctx.fillText(String(level), plot.left - 4, y);
   }
 
-  ctx.font = `${denseXAxis ? 9 : compact ? 9 : 10}px system-ui, sans-serif`;
+  ctx.font = `${compact ? 9 : 10}px system-ui, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   for (let hour = 7; hour <= 24; hour += 1) {
@@ -388,8 +387,7 @@ function renderChart() {
     ctx.beginPath(); ctx.moveTo(x, plot.top); ctx.lineTo(x, plot.bottom); ctx.stroke();
     ctx.fillStyle = '#88847c';
     ctx.textAlign = hour === 7 ? 'left' : hour === 24 ? 'right' : 'center';
-    const stagger = denseXAxis && (hour - 7) % 2 === 1 ? 13 : 0;
-    ctx.fillText(`${hour}:00`, x, plot.bottom + 7 + stagger);
+    ctx.fillText(String(hour), x, plot.bottom + 7);
   }
 
   const records = getChartEntries();
