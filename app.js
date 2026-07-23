@@ -1,6 +1,8 @@
 const ENTRY_KEY = 'satiety-journal.entries.v1';
 const PROMPT_KEY = 'satiety-journal.prompts.v1';
 
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+
 const DEFAULT_PROMPTS = [
   '饿坏了，浑身无力、手抖、头晕',
   '很饿，情绪和注意力明显受影响，但还没有手抖头晕',
@@ -269,6 +271,17 @@ function saveEditedRecord(event) {
   showToast('记录已更新');
 }
 
+function resetRecordScroll() {
+  const reset = () => {
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  };
+  reset();
+  requestAnimationFrame(() => requestAnimationFrame(reset));
+  setTimeout(reset, 120);
+}
+
 function showView(name) {
   const showStats = name === 'stats';
   document.documentElement.classList.toggle('stats-active', showStats);
@@ -281,7 +294,7 @@ function showView(name) {
     active ? button.setAttribute('aria-current', 'page') : button.removeAttribute('aria-current');
   });
   if (showStats) requestAnimationFrame(renderChart);
-  window.scrollTo({ top: 0, behavior: 'instant' });
+  else resetRecordScroll();
 }
 
 function renderPromptEditor() {
@@ -519,9 +532,11 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
     renderHome();
     if (statsDate > dateKey(new Date())) statsDate = dateKey(new Date());
-    if (!elements.statsView.hidden) renderChart();
+    showView('record');
   }
 });
+window.addEventListener('pageshow', () => showView('record'));
 
 renderLevelButtons();
 renderHome();
+showView('record');
