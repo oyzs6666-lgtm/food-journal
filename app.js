@@ -362,7 +362,7 @@ function renderChart() {
 
   const compact = bounds.height < 310;
   const bottomInset = compact ? 25 : 32;
-  const plot = { left: 22, right: bounds.width - 4, top: compact ? 16 : 27, bottom: bounds.height - bottomInset };
+  const plot = { left: 18, right: bounds.width - 4, top: compact ? 16 : 27, bottom: bounds.height - bottomInset };
   const xFor = (hour) => plot.left + ((hour - 7) / 17) * (plot.right - plot.left);
   const yFor = (level) => plot.bottom - ((level - 1) / 9) * (plot.bottom - plot.top);
 
@@ -375,7 +375,7 @@ function renderChart() {
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(plot.left, y); ctx.lineTo(plot.right, y); ctx.stroke();
     ctx.fillStyle = '#88847c';
-    ctx.fillText(String(level), plot.left - 4, y);
+    ctx.fillText(String(level), plot.left - 3, y);
   }
 
   ctx.font = `${compact ? 9 : 10}px system-ui, sans-serif`;
