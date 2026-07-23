@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="几分饱">
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=2">
   <title>几分饱 · 饱腹感记录</title>
 </head>
 <body>
@@ -132,9 +132,47 @@
     </form>
   </dialog>
 
+  <dialog id="edit-record-dialog">
+    <form method="dialog" id="edit-record-form">
+      <div class="dialog-header">
+        <div><p class="section-kicker">EDIT ENTRY</p><h2>编辑这条记录</h2></div>
+        <button class="close-button" type="button" data-close-edit aria-label="关闭">×</button>
+      </div>
+      <p class="dialog-intro">修改后，今日热量与饱腹感折线图会自动重新计算。</p>
+
+      <fieldset class="edit-level-fieldset">
+        <legend>饱腹度</legend>
+        <div class="edit-level-grid" id="edit-level-grid" role="radiogroup" aria-label="修改饱腹度"></div>
+      </fieldset>
+
+      <div class="edit-fields">
+        <label>
+          <span>食物名称（选填）</span>
+          <input id="edit-food-name" type="text" maxlength="40" autocomplete="off" placeholder="例如：番茄鸡蛋面">
+        </label>
+        <label>
+          <span>热量（选填）</span>
+          <span class="unit-input">
+            <input id="edit-food-calories" type="number" min="0" max="9999" inputmode="decimal" placeholder="例如：520">
+            <span>kcal</span>
+          </span>
+        </label>
+        <label>
+          <span>记录时间</span>
+          <input id="edit-record-time" type="time" required>
+        </label>
+      </div>
+
+      <div class="dialog-actions edit-dialog-actions">
+        <button class="secondary-button" type="button" data-close-edit>取消</button>
+        <button class="primary-button" type="submit">保存修改</button>
+      </div>
+    </form>
+  </dialog>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=2"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       navigator.serviceWorker.register('./sw.js').catch(() => {});

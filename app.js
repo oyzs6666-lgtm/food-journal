@@ -25,6 +25,8 @@ let selectedLevel = null;
 let statsDate = dateKey(new Date());
 let chartPoints = [];
 let toastTimer;
+let editingId = null;
+let editingLevel = null;
 
 const elements = {
   todayLabel: document.querySelector('#today-label'),
@@ -45,6 +47,12 @@ const elements = {
   promptDialog: document.querySelector('#prompt-dialog'),
   promptForm: document.querySelector('#prompt-form'),
   promptFields: document.querySelector('#prompt-fields'),
+  editRecordDialog: document.querySelector('#edit-record-dialog'),
+  editRecordForm: document.querySelector('#edit-record-form'),
+  editLevelGrid: document.querySelector('#edit-level-grid'),
+  editFoodName: document.querySelector('#edit-food-name'),
+  editFoodCalories: document.querySelector('#edit-food-calories'),
+  editRecordTime: document.querySelector('#edit-record-time'),
   statsDateLabel: document.querySelector('#stats-date-label'),
   statsDateInput: document.querySelector('#stats-date-input'),
   nextDay: document.querySelector('#next-day'),
@@ -136,9 +144,11 @@ function renderHome() {
   elements.todayRecords.innerHTML = records.length ? records.map((entry) => {
     const details = [entry.food, entry.calories !== null && entry.calories !== '' ? `${entry.calories} kcal` : ''].filter(Boolean).join(' · ') || '未填写食物和热量';
     return `<article class="record-row">
-      <span class="record-level" style="--level-color:${LEVEL_COLORS[entry.level - 1]}">${entry.level}</span>
-      <span class="record-main"><strong>${entry.level} 分饱</strong><span>${escapeHtml(details)}</span></span>
-      <time class="record-time" datetime="${entry.timestamp}">${formatTime(entry.timestamp)}</time>
+      <button class="record-edit-button" type="button" data-edit="${entry.id}" aria-label="编辑${formatTime(entry.timestamp)}的记录">
+        <span class="record-level" style="--level-color:${LEVEL_COLORS[entry.level - 1]}">${entry.level}</span>
+        <span class="record-main"><strong>${entry.level} 分饱</strong><span>${escapeHtml(details)}</span></span>
+        <time class="record-time" datetime="${entry.timestamp}">${formatTime(entry.timestamp)}</time>
+      </button>
       <button class="delete-record" type="button" data-delete="${entry.id}" aria-label="删除${formatTime(entry.timestamp)}的记录">×</button>
     </article>`;
   }).join('') : '<p class="empty-records">今天还没有记录，先留意一下此刻身体的感觉吧。</p>';
@@ -194,8 +204,75 @@ function deleteRecord(id) {
   showToast('记录已删除');
 }
 
+function renderEditLevels() {
+  elements.editLevelGrid.innerHTML = LEVEL_COLORS.map((color, index) => {
+    const level = index + 1;
+    return `<button class="edit-level-button" type="button" role="radio" aria-checked="${editingLevel === level}" data-edit-level="${level}" style="--level-color:${color}" aria-label="改为${level}分饱">${level}</button>`;
+  }).join('');
+}
+
+function openRecordEditor(id) {
+  const record = entries.find((entry) => entry.id === id);
+  if (!record) return;
+  editingId = id;
+  editingLevel = Number(record.level);
+  elements.editFoodName.value = record.food || '';
+  elements.editFoodCalories.value = record.calories === null || record.calories === '' ? '' : record.calories;
+  const time = new Date(record.timestamp);
+  elements.editRecordTime.value = `${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}`;
+  renderEditLevels();
+  elements.editRecordDialog.showModal();
+}
+
+function saveEditedRecord(event) {
+  event.preventDefault();
+  const index = entries.findIndex((entry) => entry.id === editingId);
+  if (index < 0 || !editingLevel) return;
+  const rawCalories = elements.editFoodCalories.value.trim();
+  const calories = rawCalories === '' ? null : Math.max(0, Math.min(9999, Number(rawCalories)));
+  if (rawCalories !== '' && !Number.isFinite(calories)) {
+    showToast('请填写有效的热量数字');
+    return;
+  }
+  const timeParts = elements.editRecordTime.value.split(':').map(Number);
+  if (timeParts.length !== 2 || timeParts.some((value) => !Number.isFinite(value))) {
+    showToast('请选择有效的记录时间');
+    return;
+  }
+  const original = entries[index];
+  const originalTime = new Date(original.timestamp);
+  const updatedTime = new Date(
+    originalTime.getFullYear(), originalTime.getMonth(), originalTime.getDate(),
+    timeParts[0], timeParts[1], 0, 0
+  );
+  const updated = {
+    ...original,
+    level: editingLevel,
+    food: elements.editFoodName.value.trim(),
+    calories,
+    timestamp: updatedTime.toISOString()
+  };
+  const previous = entries[index];
+  entries[index] = updated;
+  try {
+    persistEntries();
+  } catch {
+    entries[index] = previous;
+    showToast('保存失败，请稍后重试');
+    return;
+  }
+  editingId = null;
+  editingLevel = null;
+  elements.editRecordDialog.close();
+  renderHome();
+  renderChart();
+  showToast('记录已更新');
+}
+
 function showView(name) {
   const showStats = name === 'stats';
+  document.documentElement.classList.toggle('stats-active', showStats);
+  document.body.classList.toggle('stats-active', showStats);
   elements.recordView.hidden = showStats;
   elements.statsView.hidden = !showStats;
   elements.navButtons.forEach((button) => {
@@ -388,9 +465,26 @@ elements.levelGrid.addEventListener('click', (event) => {
 });
 elements.saveButton.addEventListener('click', saveRecord);
 elements.todayRecords.addEventListener('click', (event) => {
-  const button = event.target.closest('[data-delete]');
-  if (button) deleteRecord(button.dataset.delete);
+  const deleteButton = event.target.closest('[data-delete]');
+  if (deleteButton) {
+    deleteRecord(deleteButton.dataset.delete);
+    return;
+  }
+  const editButton = event.target.closest('[data-edit]');
+  if (editButton) openRecordEditor(editButton.dataset.edit);
 });
+elements.editLevelGrid.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-edit-level]');
+  if (!button) return;
+  editingLevel = Number(button.dataset.editLevel);
+  renderEditLevels();
+});
+elements.editRecordForm.addEventListener('submit', saveEditedRecord);
+document.querySelectorAll('[data-close-edit]').forEach((button) => button.addEventListener('click', () => {
+  editingId = null;
+  editingLevel = null;
+  elements.editRecordDialog.close();
+}));
 elements.navButtons.forEach((button) => button.addEventListener('click', () => showView(button.dataset.view)));
 document.querySelector('#edit-prompts-button').addEventListener('click', () => {
   renderPromptEditor();
