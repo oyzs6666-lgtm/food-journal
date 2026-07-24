@@ -440,10 +440,20 @@ function renderChart() {
     for (let index = 1; index < chartPoints.length; index += 1) {
       const previous = chartPoints[index - 1];
       const current = chartPoints[index];
-      const segmentGradient = ctx.createLinearGradient(previous.x, previous.y, current.x, current.y);
-      segmentGradient.addColorStop(0, LEVEL_COLORS[previous.entry.level - 1]);
-      segmentGradient.addColorStop(1, LEVEL_COLORS[current.entry.level - 1]);
-      ctx.strokeStyle = segmentGradient;
+      const startLevel = previous.entry.level;
+      const endLevel = current.entry.level;
+      if (startLevel === endLevel) {
+        ctx.strokeStyle = LEVEL_COLORS[startLevel - 1];
+      } else {
+        const segmentGradient = ctx.createLinearGradient(previous.x, previous.y, current.x, current.y);
+        const direction = endLevel > startLevel ? 1 : -1;
+        const levelDistance = Math.abs(endLevel - startLevel);
+        for (let step = 0; step <= levelDistance; step += 1) {
+          const level = startLevel + step * direction;
+          segmentGradient.addColorStop(step / levelDistance, LEVEL_COLORS[level - 1]);
+        }
+        ctx.strokeStyle = segmentGradient;
+      }
       ctx.beginPath();
       ctx.moveTo(previous.x, previous.y);
       ctx.lineTo(current.x, current.y);

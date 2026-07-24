@@ -1,5 +1,5 @@
-const CACHE_NAME = 'satiety-journal-v8';
-const APP_FILES = ['./', './index.html', './styles.css?v=5', './app.js?v=8', './manifest.json'];
+const CACHE_NAME = 'satiety-journal-v9';
+const APP_FILES = ['./', './index.html', './styles.css?v=5', './app.js?v=9', './manifest.json'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_FILES)).then(() => self.skipWaiting()));
