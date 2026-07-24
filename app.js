@@ -67,6 +67,7 @@ const elements = {
   chartWrap: document.querySelector('#chart-wrap'),
   chartEmpty: document.querySelector('#chart-empty'),
   chartTooltip: document.querySelector('#chart-tooltip'),
+  statsFoodRecords: document.querySelector('#stats-food-records'),
   toast: document.querySelector('#toast')
 };
 
@@ -371,13 +372,23 @@ function getChartEntries() {
   }).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 }
 
-function roundRect(ctx, x, y, width, height, radius) {
-  const r = Math.min(radius, width / 2, height / 2);
-  ctx.beginPath();
-  ctx.roundRect(x, y, width, height, r);
+function renderStatsFoodRecords() {
+  const foodRecords = getChartEntries()
+    .filter((entry) => String(entry.food || '').trim());
+  elements.statsFoodRecords.innerHTML = foodRecords.map((entry) => {
+    const calories = entry.calories !== null && entry.calories !== '' && entry.calories !== undefined
+      ? `${entry.calories} kcal`
+      : '—';
+    return `<article class="stats-food-row">
+      <time class="stats-food-time" datetime="${entry.timestamp}">${formatTime(entry.timestamp)}</time>
+      <div class="stats-food-name">${escapeHtml(entry.food)}</div>
+      <div class="stats-food-calories">${calories}</div>
+    </article>`;
+  }).join('');
 }
 
 function renderChart() {
+  renderStatsFoodRecords();
   const canvas = elements.chart;
   const bounds = elements.chartWrap.getBoundingClientRect();
   if (!bounds.width || !bounds.height) return;
@@ -467,117 +478,6 @@ function renderChart() {
     ctx.strokeStyle = '#fffdf9';
     ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.arc(point.x, point.y, compact ? 4.5 : 5.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  });
-
-  const occupiedLabels = [];
-  const pointSafetyRadius = compact ? 8 : 10;
-  const pointObstacles = chartPoints.map((point) => ({
-    x: point.x - pointSafetyRadius,
-    y: point.y - pointSafetyRadius,
-    width: pointSafetyRadius * 2,
-    height: pointSafetyRadius * 2
-  }));
-  const labelFontSize = compact ? 9 : 10;
-  const labelLineHeight = compact ? 12 : 14;
-  const maxLabelWidth = Math.max(60, plot.right - plot.left - 8);
-  ctx.font = `${labelFontSize}px system-ui, sans-serif`;
-
-  function wrapLabelText(text) {
-    if (ctx.measureText(text).width + 14 <= maxLabelWidth) return [text];
-    const lines = [];
-    let line = '';
-    for (const character of Array.from(text)) {
-      const candidate = line + character;
-      if (line && ctx.measureText(candidate).width + 14 > maxLabelWidth) {
-        lines.push(line);
-        line = character;
-      } else {
-        line = candidate;
-      }
-    }
-    if (line) lines.push(line);
-    return lines;
-  }
-
-  function overlapArea(first, second) {
-    const width = Math.max(0, Math.min(first.x + first.width, second.x + second.width) - Math.max(first.x, second.x));
-    const height = Math.max(0, Math.min(first.y + first.height, second.y + second.height) - Math.max(first.y, second.y));
-    return width * height;
-  }
-
-  function placeLabel(point, width, height, index) {
-    const candidates = [];
-    const directions = index % 2 === 0
-      ? ['above', 'below', 'right', 'left', 'upperRight', 'upperLeft', 'lowerRight', 'lowerLeft']
-      : ['below', 'above', 'left', 'right', 'lowerLeft', 'lowerRight', 'upperLeft', 'upperRight'];
-    for (let ring = 0; ring < 4; ring += 1) {
-      const gap = 9 + ring * (compact ? 14 : 20);
-      directions.forEach((direction) => {
-        const positions = {
-          above: { x: point.x - width / 2, y: point.y - height - gap },
-          below: { x: point.x - width / 2, y: point.y + gap },
-          right: { x: point.x + gap, y: point.y - height / 2 },
-          left: { x: point.x - width - gap, y: point.y - height / 2 },
-          upperRight: { x: point.x + gap, y: point.y - height - gap },
-          upperLeft: { x: point.x - width - gap, y: point.y - height - gap },
-          lowerRight: { x: point.x + gap, y: point.y + gap },
-          lowerLeft: { x: point.x - width - gap, y: point.y + gap }
-        };
-        candidates.push(positions[direction]);
-      });
-    }
-
-    let best = null;
-    for (const candidate of candidates) {
-      const maxX = Math.max(plot.left + 2, plot.right - width - 2);
-      const maxY = Math.max(plot.top + 2, plot.bottom - height - 2);
-      const rect = {
-        x: Math.max(plot.left + 2, Math.min(maxX, candidate.x)),
-        y: Math.max(plot.top + 2, Math.min(maxY, candidate.y)),
-        width,
-        height
-      };
-      const overlap = occupiedLabels.reduce((sum, occupied) => sum + overlapArea(rect, occupied), 0);
-      const pointOverlap = pointObstacles.reduce((sum, obstacle) => sum + overlapArea(rect, obstacle), 0);
-      const distance = Math.hypot((rect.x + width / 2) - point.x, (rect.y + height / 2) - point.y);
-      const score = pointOverlap * 1000000 + overlap * 1000 + distance;
-      if (!best || score < best.score) best = { ...rect, score };
-      if (overlap === 0 && pointOverlap === 0) return rect;
-    }
-    return best;
-  }
-
-  chartPoints.forEach((point, index) => {
-    const { entry } = point;
-
-    const label = [entry.food, entry.calories !== null && entry.calories !== '' ? `${entry.calories} kcal` : ''].filter(Boolean).join('，');
-    if (!label) return;
-    const lines = wrapLabelText(label);
-    const labelWidth = Math.min(maxLabelWidth, Math.max(...lines.map((line) => ctx.measureText(line).width)) + 14);
-    const labelHeight = lines.length * labelLineHeight + 8;
-    const position = placeLabel(point, labelWidth, labelHeight, index);
-    occupiedLabels.push(position);
-    ctx.fillStyle = 'rgba(255,253,249,.94)';
-    ctx.strokeStyle = '#d8d3ca';
-    ctx.lineWidth = 1;
-    roundRect(ctx, position.x, position.y, labelWidth, labelHeight, 6); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#4f4c46';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    lines.forEach((line, lineIndex) => {
-      ctx.fillText(line, position.x + labelWidth / 2, position.y + 4 + labelLineHeight * (lineIndex + .5));
-    });
-  });
-
-  // Draw points once more above all labels so a dense layout can never hide them.
-  chartPoints.forEach((point) => {
-    ctx.fillStyle = LEVEL_COLORS[point.entry.level - 1];
-    ctx.strokeStyle = '#fffdf9';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.arc(point.x, point.y, compact ? 4.5 : 5.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
   });
 }
 

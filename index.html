@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="几分饱">
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="styles.css?v=5">
+  <link rel="stylesheet" href="styles.css?v=12">
   <title>几分饱 · 饱腹感记录</title>
 </head>
 <body>
@@ -92,20 +92,13 @@
           <button class="date-button" id="next-day" type="button" aria-label="后一天">›</button>
         </div>
         <div class="chart-card">
-          <div class="chart-heading">
-            <div>
-              <p class="section-kicker">DAILY CURVE</p>
-              <h2>一天的饱腹感曲线</h2>
-            </div>
-            <div class="chart-legend"><span></span>饱腹度</div>
-          </div>
           <div class="chart-wrap" id="chart-wrap">
             <canvas id="satiety-chart" role="img" aria-label="当天7点至24点的饱腹度折线图"></canvas>
             <div class="chart-empty" id="chart-empty" hidden>这一天还没有 7:00–24:00 的记录</div>
             <div class="chart-tooltip" id="chart-tooltip" hidden></div>
           </div>
-          <p class="rotate-tip">横屏时图表会铺满可用空间，轻触数据点可查看食物与热量。</p>
         </div>
+        <div class="stats-food-records" id="stats-food-records" aria-live="polite"></div>
       </section>
     </main>
 
@@ -174,7 +167,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=12"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       navigator.serviceWorker.register('./sw.js').catch(() => {});
