@@ -461,34 +461,104 @@ function renderChart() {
     }
   }
 
-  chartPoints.forEach((point, index) => {
+  chartPoints.forEach((point) => {
     const { entry } = point;
     ctx.fillStyle = LEVEL_COLORS[entry.level - 1];
     ctx.strokeStyle = '#fffdf9';
     ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.arc(point.x, point.y, compact ? 4.5 : 5.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  });
+
+  const occupiedLabels = [];
+  const labelFontSize = compact ? 9 : 10;
+  const labelLineHeight = compact ? 12 : 14;
+  const maxLabelWidth = Math.max(60, plot.right - plot.left - 8);
+  ctx.font = `${labelFontSize}px system-ui, sans-serif`;
+
+  function wrapLabelText(text) {
+    if (ctx.measureText(text).width + 14 <= maxLabelWidth) return [text];
+    const lines = [];
+    let line = '';
+    for (const character of Array.from(text)) {
+      const candidate = line + character;
+      if (line && ctx.measureText(candidate).width + 14 > maxLabelWidth) {
+        lines.push(line);
+        line = character;
+      } else {
+        line = candidate;
+      }
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  function overlapArea(first, second) {
+    const width = Math.max(0, Math.min(first.x + first.width, second.x + second.width) - Math.max(first.x, second.x));
+    const height = Math.max(0, Math.min(first.y + first.height, second.y + second.height) - Math.max(first.y, second.y));
+    return width * height;
+  }
+
+  function placeLabel(point, width, height, index) {
+    const candidates = [];
+    const directions = index % 2 === 0
+      ? ['above', 'below', 'right', 'left', 'upperRight', 'upperLeft', 'lowerRight', 'lowerLeft']
+      : ['below', 'above', 'left', 'right', 'lowerLeft', 'lowerRight', 'upperLeft', 'upperRight'];
+    for (let ring = 0; ring < 4; ring += 1) {
+      const gap = 9 + ring * (compact ? 14 : 20);
+      directions.forEach((direction) => {
+        const positions = {
+          above: { x: point.x - width / 2, y: point.y - height - gap },
+          below: { x: point.x - width / 2, y: point.y + gap },
+          right: { x: point.x + gap, y: point.y - height / 2 },
+          left: { x: point.x - width - gap, y: point.y - height / 2 },
+          upperRight: { x: point.x + gap, y: point.y - height - gap },
+          upperLeft: { x: point.x - width - gap, y: point.y - height - gap },
+          lowerRight: { x: point.x + gap, y: point.y + gap },
+          lowerLeft: { x: point.x - width - gap, y: point.y + gap }
+        };
+        candidates.push(positions[direction]);
+      });
+    }
+
+    let best = null;
+    for (const candidate of candidates) {
+      const maxX = Math.max(plot.left + 2, plot.right - width - 2);
+      const maxY = Math.max(plot.top + 2, plot.bottom - height - 2);
+      const rect = {
+        x: Math.max(plot.left + 2, Math.min(maxX, candidate.x)),
+        y: Math.max(plot.top + 2, Math.min(maxY, candidate.y)),
+        width,
+        height
+      };
+      const overlap = occupiedLabels.reduce((sum, occupied) => sum + overlapArea(rect, occupied), 0);
+      const distance = Math.hypot((rect.x + width / 2) - point.x, (rect.y + height / 2) - point.y);
+      const score = overlap * 1000 + distance;
+      if (!best || score < best.score) best = { ...rect, score };
+      if (overlap === 0) return rect;
+    }
+    return best;
+  }
+
+  chartPoints.forEach((point, index) => {
+    const { entry } = point;
 
     const label = [entry.food, entry.calories !== null && entry.calories !== '' ? `${entry.calories} kcal` : ''].filter(Boolean).join('，');
     if (!label) return;
-    const shortLabel = label.length > 18 ? `${label.slice(0, 17)}…` : label;
-    ctx.font = `${compact ? 9 : 10}px system-ui, sans-serif`;
-    const labelWidth = Math.min(ctx.measureText(shortLabel).width + 12, 160);
-    const labelHeight = compact ? 18 : 20;
-    let labelX = point.x - labelWidth / 2;
-    labelX = Math.max(plot.left, Math.min(plot.right - labelWidth, labelX));
-    let labelY = point.y - labelHeight - 9;
-    if (labelY < plot.top) labelY = point.y + 9;
-    if (index > 0 && Math.abs(point.x - chartPoints[index - 1].x) < labelWidth * .55) {
-      labelY = point.y + 9;
-    }
+    const lines = wrapLabelText(label);
+    const labelWidth = Math.min(maxLabelWidth, Math.max(...lines.map((line) => ctx.measureText(line).width)) + 14);
+    const labelHeight = lines.length * labelLineHeight + 8;
+    const position = placeLabel(point, labelWidth, labelHeight, index);
+    occupiedLabels.push(position);
     ctx.fillStyle = 'rgba(255,253,249,.94)';
     ctx.strokeStyle = '#d8d3ca';
     ctx.lineWidth = 1;
-    roundRect(ctx, labelX, labelY, labelWidth, labelHeight, 6); ctx.fill(); ctx.stroke();
+    roundRect(ctx, position.x, position.y, labelWidth, labelHeight, 6); ctx.fill(); ctx.stroke();
     ctx.fillStyle = '#4f4c46';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(shortLabel, labelX + labelWidth / 2, labelY + labelHeight / 2 + .5, labelWidth - 8);
+    lines.forEach((line, lineIndex) => {
+      ctx.fillText(line, position.x + labelWidth / 2, position.y + 4 + labelLineHeight * (lineIndex + .5));
+    });
   });
 }
 
