@@ -470,6 +470,13 @@ function renderChart() {
   });
 
   const occupiedLabels = [];
+  const pointSafetyRadius = compact ? 8 : 10;
+  const pointObstacles = chartPoints.map((point) => ({
+    x: point.x - pointSafetyRadius,
+    y: point.y - pointSafetyRadius,
+    width: pointSafetyRadius * 2,
+    height: pointSafetyRadius * 2
+  }));
   const labelFontSize = compact ? 9 : 10;
   const labelLineHeight = compact ? 12 : 14;
   const maxLabelWidth = Math.max(60, plot.right - plot.left - 8);
@@ -531,10 +538,11 @@ function renderChart() {
         height
       };
       const overlap = occupiedLabels.reduce((sum, occupied) => sum + overlapArea(rect, occupied), 0);
+      const pointOverlap = pointObstacles.reduce((sum, obstacle) => sum + overlapArea(rect, obstacle), 0);
       const distance = Math.hypot((rect.x + width / 2) - point.x, (rect.y + height / 2) - point.y);
-      const score = overlap * 1000 + distance;
+      const score = pointOverlap * 1000000 + overlap * 1000 + distance;
       if (!best || score < best.score) best = { ...rect, score };
-      if (overlap === 0) return rect;
+      if (overlap === 0 && pointOverlap === 0) return rect;
     }
     return best;
   }
@@ -559,6 +567,17 @@ function renderChart() {
     lines.forEach((line, lineIndex) => {
       ctx.fillText(line, position.x + labelWidth / 2, position.y + 4 + labelLineHeight * (lineIndex + .5));
     });
+  });
+
+  // Draw points once more above all labels so a dense layout can never hide them.
+  chartPoints.forEach((point) => {
+    ctx.fillStyle = LEVEL_COLORS[point.entry.level - 1];
+    ctx.strokeStyle = '#fffdf9';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, compact ? 4.5 : 5.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
   });
 }
 
